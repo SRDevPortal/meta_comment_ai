@@ -1,0 +1,17 @@
+[project]
+name = "meta_comment_ai"
+version = "0.0.1"
+description = "AI-assisted Meta comments and lead handling for Frappe"
+authors = [
+    { name = "SAI", email = "admin@example.com" }
+]
+requires-python = ">=3.10"
+readme = "README.md"
+dependencies = []
+
+[build-system]
+requires = ["flit_core >=3.4,<4"]
+build-backend = "flit_core.buildapi"
+
+[tool.bench.frappe-dependencies]
+frappe = ">=15.0.0"

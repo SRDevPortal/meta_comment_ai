@@ -1,0 +1,72 @@
+{
+ "charts": [],
+ "content": "[{\"id\": \"header_main\", \"type\": \"header\", \"data\": {\"text\": \"Meta Comment AI\", \"level\": 4, \"col\": 12}}, {\"id\": \"shortcut_0\", \"type\": \"shortcut\", \"data\": {\"shortcut_name\": \"Comment Inbox\", \"col\": 3}}, {\"id\": \"shortcut_1\", \"type\": \"shortcut\", \"data\": {\"shortcut_name\": \"Needs Review\", \"col\": 3}}, {\"id\": \"shortcut_2\", \"type\": \"shortcut\", \"data\": {\"shortcut_name\": \"Comment Actions\", \"col\": 3}}, {\"id\": \"shortcut_3\", \"type\": \"shortcut\", \"data\": {\"shortcut_name\": \"Comments Backup\", \"col\": 3}}, {\"id\": \"shortcut_4\", \"type\": \"shortcut\", \"data\": {\"shortcut_name\": \"Social Accounts\", \"col\": 3}}, {\"id\": \"shortcut_5\", \"type\": \"shortcut\", \"data\": {\"shortcut_name\": \"AI Settings\", \"col\": 3}}]",
+ "creation": "2026-05-25 13:48:18.498485",
+ "custom_blocks": [],
+ "docstatus": 0,
+ "doctype": "Workspace",
+ "for_user": "",
+ "hide_custom": 0,
+ "icon": "comment",
+ "idx": 0,
+ "indicator_color": "",
+ "is_hidden": 0,
+ "label": "Meta Comment AI",
+ "links": [],
+ "modified": "2026-06-01 13:20:25.081702",
+ "modified_by": "Administrator",
+ "module": "Meta Comment AI",
+ "name": "Meta Comment AI",
+ "number_cards": [],
+ "owner": "Administrator",
+ "parent_page": "",
+ "public": 1,
+ "quick_lists": [],
+ "roles": [],
+ "sequence_id": 0.0,
+ "shortcuts": [
+  {
+   "doc_view": "",
+   "icon": "inbox",
+   "label": "Comment Inbox",
+   "link_to": "meta-comment-inbox",
+   "type": "Page"
+  },
+  {
+   "doc_view": "",
+   "icon": "check-square",
+   "label": "Needs Review",
+   "link_to": "Meta Comment Action",
+   "type": "DocType"
+  },
+  {
+   "doc_view": "",
+   "icon": "list",
+   "label": "Comment Actions",
+   "link_to": "Meta Comment Action",
+   "type": "DocType"
+  },
+  {
+   "doc_view": "",
+   "icon": "database",
+   "label": "Comments Backup",
+   "link_to": "Meta Comment",
+   "type": "DocType"
+  },
+  {
+   "doc_view": "",
+   "icon": "share-2",
+   "label": "Social Accounts",
+   "link_to": "Meta Social Account",
+   "type": "DocType"
+  },
+  {
+   "doc_view": "",
+   "icon": "settings",
+   "label": "AI Settings",
+   "link_to": "Meta Comment AI Settings",
+   "type": "DocType"
+  }
+ ],
+ "title": "Meta Comment AI"
+}

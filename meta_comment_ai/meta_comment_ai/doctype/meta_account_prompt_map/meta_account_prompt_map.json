@@ -1,0 +1,31 @@
+{
+ "actions": [],
+ "creation": "2026-05-25 00:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "meta_social_account",
+  "is_active",
+  "system_prompt",
+  "medical_guardrails",
+  "multilingual_reply_policy"
+ ],
+ "fields": [
+  {"fieldname": "meta_social_account", "fieldtype": "Link", "in_list_view": 1, "label": "Meta Account", "options": "Meta Social Account", "reqd": 1},
+  {"default": "1", "fieldname": "is_active", "fieldtype": "Check", "in_list_view": 1, "label": "Is Active"},
+  {"description": "Account-specific prompt. Add one row per Facebook Page or Instagram account when tone/services differ.", "fieldname": "system_prompt", "fieldtype": "Long Text", "label": "System Prompt"},
+  {"fieldname": "medical_guardrails", "fieldtype": "Long Text", "label": "Medical Guardrails"},
+  {"fieldname": "multilingual_reply_policy", "fieldtype": "Long Text", "label": "Multilingual Reply Policy"}
+ ],
+ "istable": 1,
+ "links": [],
+ "modified": "2026-05-25 00:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Meta Comment AI",
+ "name": "Meta Account Prompt Map",
+ "owner": "Administrator",
+ "permissions": [],
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": []
+}

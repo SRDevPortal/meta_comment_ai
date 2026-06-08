@@ -1,0 +1,20 @@
+{
+ "content": null,
+ "creation": "2026-05-25 00:00:00.000000",
+ "docstatus": 0,
+ "doctype": "Page",
+ "icon": "comment-discussion",
+ "idx": 0,
+ "modified": "2026-05-25 00:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Meta Comment AI",
+ "name": "meta-comment-inbox",
+ "owner": "Administrator",
+ "page_name": "meta-comment-inbox",
+ "roles": [],
+ "script": null,
+ "standard": "Yes",
+ "style": null,
+ "system_page": 0,
+ "title": "Meta Comment Inbox"
+}

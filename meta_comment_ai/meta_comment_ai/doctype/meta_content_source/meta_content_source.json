@@ -1,0 +1,57 @@
+{
+ "actions": [],
+ "allow_rename": 1,
+ "autoname": "format:MCS-{platform}-{source_id}",
+ "creation": "2026-05-25 00:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "source_label",
+  "platform",
+  "social_account",
+  "source_type",
+  "source_id",
+  "message",
+  "permalink_url",
+  "created_time",
+  "media_url",
+  "thumbnail_url",
+  "comment_count",
+  "last_synced_at",
+  "last_error",
+  "raw_json"
+ ],
+ "fields": [
+  {"fieldname": "source_label", "fieldtype": "Data", "in_list_view": 1, "label": "Source Label", "reqd": 1},
+  {"fieldname": "platform", "fieldtype": "Select", "in_list_view": 1, "label": "Platform", "options": "Facebook\nInstagram", "reqd": 1},
+  {"fieldname": "social_account", "fieldtype": "Link", "in_list_view": 1, "label": "Social Account", "options": "Meta Social Account", "reqd": 1},
+  {"fieldname": "source_type", "fieldtype": "Select", "in_list_view": 1, "label": "Source Type", "options": "Facebook Post\nInstagram Media\nInstagram Reel\nManual Source", "reqd": 1},
+  {"fieldname": "source_id", "fieldtype": "Data", "in_list_view": 1, "label": "Source ID", "reqd": 1, "unique": 1},
+  {"fieldname": "message", "fieldtype": "Text", "label": "Message / Caption"},
+  {"fieldname": "permalink_url", "fieldtype": "Small Text", "label": "Permalink URL"},
+  {"fieldname": "created_time", "fieldtype": "Datetime", "in_list_view": 1, "label": "Created Time"},
+  {"fieldname": "media_url", "fieldtype": "Small Text", "label": "Media URL"},
+  {"fieldname": "thumbnail_url", "fieldtype": "Small Text", "label": "Thumbnail URL"},
+  {"default": "0", "fieldname": "comment_count", "fieldtype": "Int", "in_list_view": 1, "label": "Comment Count"},
+  {"fieldname": "last_synced_at", "fieldtype": "Datetime", "label": "Last Synced At", "read_only": 1},
+  {"fieldname": "last_error", "fieldtype": "Small Text", "label": "Last Error", "read_only": 1},
+  {"fieldname": "raw_json", "fieldtype": "Code", "label": "Raw JSON", "options": "JSON"}
+ ],
+ "links": [
+  {"link_doctype": "Meta Comment", "link_fieldname": "content_source"}
+ ],
+ "modified": "2026-05-25 00:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Meta Comment AI",
+ "name": "Meta Content Source",
+ "owner": "Administrator",
+ "permissions": [
+  {"create": 1, "delete": 1, "email": 1, "export": 1, "print": 1, "read": 1, "report": 1, "role": "System Manager", "share": 1, "write": 1},
+  {"create": 1, "read": 1, "report": 1, "role": "Sales Manager", "write": 1}
+ ],
+ "sort_field": "created_time",
+ "sort_order": "DESC",
+ "states": [],
+ "title_field": "source_label",
+ "track_changes": 1
+}
