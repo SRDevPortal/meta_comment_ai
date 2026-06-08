@@ -4,19 +4,19 @@ Frappe app for collecting Facebook and Instagram comments, drafting AI-safe medi
 
 ## Install / Build
 
-If `bench build --app meta_comment_ai` fails with `paths[0] ... Received undefined`, ensure the app is registered in `sites/apps.txt` before building:
+Fresh install:
 
 ```bash
 cd /home/frappe/frappe-bench
-grep -qxF meta_comment_ai sites/apps.txt || echo meta_comment_ai >> sites/apps.txt
-bench setup requirements
-bench build --app meta_comment_ai
+bench get-app https://github.com/SRDevPortal/meta_comment_ai.git --branch develop
+bench --site your-site-name install-app meta_comment_ai
 ```
 
-For a fresh install, this also works:
+This app includes a small `postinstall` hook that registers `meta_comment_ai` in `sites/apps.txt` before Bench starts asset build. This prevents Frappe esbuild from failing with `paths[0] ... Received undefined` during `bench get-app`.
+
+If you are recovering an older checkout, register the app once before building:
 
 ```bash
-bench get-app https://github.com/SRDevPortal/meta_comment_ai.git --skip-assets
 grep -qxF meta_comment_ai sites/apps.txt || echo meta_comment_ai >> sites/apps.txt
 bench setup requirements
 bench build --app meta_comment_ai
