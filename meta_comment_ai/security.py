@@ -23,5 +23,6 @@ def require_destructive_action():
 def require_roles(roles: tuple[str, ...], message: str):
     if frappe.session.user == "Guest":
         frappe.throw(_("Login is required."), frappe.PermissionError)
-    if not any(frappe.has_role(role) for role in roles):
+    user_roles = set(frappe.get_roles(frappe.session.user))
+    if not user_roles.intersection(roles):
         frappe.throw(message, frappe.PermissionError)

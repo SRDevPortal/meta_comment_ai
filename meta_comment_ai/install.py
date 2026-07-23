@@ -152,7 +152,7 @@ def ensure_workspace():
                 "module": name,
                 "public": 1,
                 "is_standard": 1,
-                "icon": "message-square",
+                "icon": "share-people",
             }
         )
 

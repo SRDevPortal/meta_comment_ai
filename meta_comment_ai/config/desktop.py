@@ -8,7 +8,7 @@ def get_data():
             "category": "Modules",
             "label": _("Meta Comment AI"),
             "color": "#2f6b5f",
-            "icon": "octicon octicon-comment-discussion",
+            "icon": "share-people",
             "type": "module",
             "description": _("AI-assisted Meta comment lead handling"),
         }
