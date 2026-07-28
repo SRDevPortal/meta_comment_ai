@@ -1,12 +1,10 @@
 from __future__ import annotations
 
 import hmac
+import hashlib
 import json
 
 import frappe
-
-from meta_comment_ai.services.comments import upsert_comment_from_event
-
 
 @frappe.whitelist(allow_guest=True)
 def verify():
@@ -29,8 +27,28 @@ def receive():
     if not payload:
         frappe.throw("Invalid or empty Meta webhook payload")
     _verify_signature_if_configured(payload)
-    comment_name = upsert_comment_from_event(payload)
-    return {"success": True, "comment": comment_name}
+    frappe.enqueue(
+        "meta_comment_ai.api.webhook.process_payload",
+        queue="short",
+        payload=payload,
+        enqueue_after_commit=True,
+        now=False,
+        job_id=_event_job_id(payload),
+        deduplicate=True,
+    )
+    return {"success": True, "queued": True}
+
+
+def process_payload(payload: dict):
+    from meta_comment_ai.services.comments import upsert_comment_from_event
+
+    return upsert_comment_from_event(payload)
+
+
+def _event_job_id(payload: dict) -> str:
+    canonical_payload = json.dumps(payload, sort_keys=True, separators=(",", ":"))
+    digest = hashlib.sha256(canonical_payload.encode()).hexdigest()[:16]
+    return f"meta_comment_webhook_{digest}"
 
 
 def _payload() -> dict:
@@ -45,7 +63,12 @@ def _payload() -> dict:
 def _verify_token(token: str | None) -> bool:
     if not token:
         return False
-    accounts = frappe.get_all("Meta Social Account", filters={"is_active": 1}, pluck="name")
+    accounts = frappe.get_all(
+        "Meta Social Account",
+        filters={"is_active": 1},
+        pluck="name",
+        limit_page_length=1000,
+    )
     for account_name in accounts:
         account = frappe.get_doc("Meta Social Account", account_name)
         if account.get_password("webhook_verify_token") == token:
@@ -58,7 +81,12 @@ def _verify_signature_if_configured(payload: dict):
     if not signature or not signature.startswith("sha256="):
         frappe.throw("Missing Meta webhook signature")
 
-    accounts = frappe.get_all("Meta Social Account", filters={"is_active": 1}, pluck="name")
+    accounts = frappe.get_all(
+        "Meta Social Account",
+        filters={"is_active": 1},
+        pluck="name",
+        limit_page_length=1000,
+    )
     if not accounts:
         frappe.throw("No active Meta Social Account is configured")
 

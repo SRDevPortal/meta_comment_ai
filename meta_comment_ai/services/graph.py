@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-import time
-
 import requests
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
 
 
 GRAPH_BASE = "https://graph.facebook.com"
@@ -17,6 +17,27 @@ class MetaGraphRateLimitError(MetaGraphError):
 
 
 RATE_LIMIT_ERROR_CODES = {4, 17, 32, 613, 80004}
+CONNECT_TIMEOUT_SECONDS = 5
+READ_TIMEOUT_SECONDS = 25
+
+
+def _session() -> requests.Session:
+    session = requests.Session()
+    retry = Retry(
+        total=2,
+        connect=2,
+        read=1,
+        status=2,
+        backoff_factor=0.5,
+        status_forcelist=(500, 502, 503, 504),
+        allowed_methods=frozenset({"GET", "HEAD"}),
+        respect_retry_after_header=True,
+    )
+    session.mount("https://", HTTPAdapter(max_retries=retry, pool_connections=10, pool_maxsize=10))
+    return session
+
+
+HTTP = _session()
 
 
 def graph_url(account, path: str) -> str:
@@ -99,10 +120,10 @@ def delete_comment(account, comment_id: str) -> dict:
 
 
 def _request(method: str, url: str, account, **kwargs) -> dict:
-    return _request_once(method, url, account, retries=2, **kwargs)
+    return _request_once(method, url, account, **kwargs)
 
 
-def _request_once(method: str, url: str, account, retries: int = 0, **kwargs) -> dict:
+def _request_once(method: str, url: str, account, **kwargs) -> dict:
     token = account.get_password("access_token") if hasattr(account, "get_password") else None
     params = dict(kwargs.pop("params", {}) or {})
     data = kwargs.pop("data", None)
@@ -112,7 +133,14 @@ def _request_once(method: str, url: str, account, retries: int = 0, **kwargs) ->
         data = dict(data or {})
         if token:
             data.setdefault("access_token", token)
-    response = requests.request(method, url, params=params, data=data, timeout=30, **kwargs)
+    response = HTTP.request(
+        method,
+        url,
+        params=params,
+        data=data,
+        timeout=(CONNECT_TIMEOUT_SECONDS, READ_TIMEOUT_SECONDS),
+        **kwargs,
+    )
     try:
         payload = response.json()
     except Exception:
@@ -120,9 +148,6 @@ def _request_once(method: str, url: str, account, retries: int = 0, **kwargs) ->
     if response.status_code >= 400 or payload.get("error"):
         error = payload.get("error") or payload
         if _is_rate_limited(response, error):
-            if retries > 0:
-                time.sleep(_retry_after(response))
-                return _request_once(method, url, account, retries=retries - 1, params=params, data=data, **kwargs)
             raise MetaGraphRateLimitError(str(error))
         raise MetaGraphError(str(error))
     return payload
@@ -137,13 +162,3 @@ def _is_rate_limited(response, error) -> bool:
         except Exception:
             return False
     return "rate limit" in str(error).lower() or "too many" in str(error).lower()
-
-
-def _retry_after(response) -> int:
-    try:
-        value = int(response.headers.get("Retry-After") or 0)
-        if value > 0:
-            return min(value, 120)
-    except Exception:
-        pass
-    return 60

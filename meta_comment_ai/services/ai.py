@@ -6,6 +6,8 @@ from types import SimpleNamespace
 
 import frappe
 import requests
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
 
 from meta_comment_ai.services.extraction import detect_language, extract_phone_numbers
 from meta_comment_ai.services.policy import classify_risk, normalize_risk
@@ -16,6 +18,24 @@ UNSAFE_MEDICAL_REPLY_RE = re.compile(
     r"\b(take|use|start|stop|prescribe|dosage|dose|mg|tablet|capsule|medicine|medication|cure|"
     r"dawai|goli|ilaaj|ilaj)\b",
     re.I,
+)
+AI_HTTP = requests.Session()
+AI_HTTP.mount(
+    "https://",
+    HTTPAdapter(
+        max_retries=Retry(
+            total=2,
+            connect=2,
+            read=0,
+            status=2,
+            backoff_factor=0.5,
+            status_forcelist=(429, 500, 502, 503, 504),
+            allowed_methods=frozenset({"POST"}),
+            respect_retry_after_header=True,
+        ),
+        pool_connections=5,
+        pool_maxsize=5,
+    ),
 )
 
 
@@ -170,7 +190,7 @@ Risk: {risk}
 Phone numbers found: {phones}
 Comment: {comment_doc.comment_text or ''}
 """
-    response = requests.post(
+    response = AI_HTTP.post(
         url,
         headers={"Authorization": f"Bearer {provider.api_key}", "Content-Type": "application/json"},
         json={
@@ -182,7 +202,7 @@ Comment: {comment_doc.comment_text or ''}
                 {"role": "user", "content": prompt},
             ],
         },
-        timeout=45,
+        timeout=(5, 30),
     )
     response.raise_for_status()
     content = response.json()["choices"][0]["message"]["content"]
