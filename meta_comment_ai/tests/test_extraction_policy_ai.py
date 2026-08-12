@@ -40,3 +40,13 @@ class TestExtractionPolicyAI(unittest.TestCase):
         )
         assert result["action"] == "draft_public_reply"
         assert result["reply_text"]
+
+    def test_ai_language_is_normalized(self):
+        result = validate_ai_result(
+            {"action": "draft_public_reply", "reply_text": "Hello", "language": "English"},
+            fallback_text="hello",
+            fallback_language="en",
+            fallback_risk="Low",
+            phones=[],
+        )
+        assert result["language"] == "en"

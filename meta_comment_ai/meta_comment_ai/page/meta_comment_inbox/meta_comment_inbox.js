@@ -43,6 +43,7 @@ frappe.pages["meta-comment-inbox"].on_page_load = function(wrapper) {
             .mca-comment-tools { padding: 10px 14px; border-bottom: 1px solid var(--border-color); display: grid; gap: 8px; }
             .mca-comment-list { overflow: auto; flex: 1 1 auto; min-height: 160px; }
             .mca-comment-row { padding: 12px 14px; border-bottom: 1px solid var(--border-color); cursor: pointer; }
+            .mca-comment-row.reply { margin-left: 24px; border-left: 3px solid var(--border-color); }
             .mca-comment-row:hover, .mca-comment-row.active { background: var(--fg-hover-color); }
             .mca-comment-head { display: flex; justify-content: space-between; gap: 8px; margin-bottom: 5px; }
             .mca-comment-user { font-weight: 700; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -284,20 +285,34 @@ frappe.pages["meta-comment-inbox"].on_page_load = function(wrapper) {
         if (!comments.length) {
             return '<div class="mca-empty">No synced comments for this post/reel yet.</div>';
         }
-        return comments.map(renderCommentRow).join("");
+        const replies = new Map();
+        comments.filter((row) => row.parent_comment_id).forEach((row) => {
+            const rows = replies.get(row.parent_comment_id) || [];
+            rows.push(row);
+            replies.set(row.parent_comment_id, rows);
+        });
+        const ordered = [];
+        comments.filter((row) => !row.parent_comment_id).forEach((row) => {
+            ordered.push(row, ...(replies.get(row.platform_comment_id) || []));
+        });
+        const known = new Set(ordered.map((row) => row.name));
+        ordered.push(...comments.filter((row) => !known.has(row.name)));
+        return ordered.map(renderCommentRow).join("");
     }
 
     function renderCommentRow(row) {
         const actor = row.commenter_username || row.commenter_name || "Unknown";
         const active = selectedComment === row.name ? "active" : "";
+        const reply = row.parent_comment_id ? "reply" : "";
         return `
-            <div class="mca-comment-row ${active}" data-comment="${frappe.utils.escape_html(row.name)}">
+            <div class="mca-comment-row ${active} ${reply}" data-comment="${frappe.utils.escape_html(row.name)}">
                 <div class="mca-comment-head">
                     <div class="mca-comment-user">${frappe.utils.escape_html(actor)}</div>
                     <div class="mca-comment-status">${frappe.utils.escape_html(row.processing_status || "")}</div>
                 </div>
                 <div class="mca-comment-text">${frappe.utils.escape_html(row.comment_text || "No text")}</div>
                 <div class="mca-meta">
+                    ${row.parent_comment_id ? "<span>Reply</span>" : ""}
                     <span>${frappe.utils.escape_html(row.risk_category || "")}</span>
                     ${row.phone_numbers ? "<span>Phone lead</span>" : ""}
                     ${row.crm_lead ? `<a href="/app/crm-lead/${encodeURIComponent(row.crm_lead)}">CRM Lead</a>` : ""}

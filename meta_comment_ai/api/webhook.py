@@ -42,7 +42,36 @@ def receive():
 def process_payload(payload: dict):
     from meta_comment_ai.services.comments import upsert_comment_from_event
 
-    return upsert_comment_from_event(payload)
+    names = []
+    for event, platform, account in iter_comment_events(payload):
+        name = upsert_comment_from_event(event, platform=platform, account=account)
+        if name:
+            names.append(name)
+    return names
+
+
+def iter_comment_events(payload: dict):
+    """Yield every event in a batched Meta webhook, not just the first change."""
+    platform = "Instagram" if "instagram" in str(payload.get("object") or "").lower() else "Facebook"
+    for entry in payload.get("entry") or []:
+        account = _account_for_entry(platform, str(entry.get("id") or ""))
+        for change in entry.get("changes") or []:
+            if not isinstance(change.get("value"), dict):
+                continue
+            event = {"object": payload.get("object"), "entry": [{"id": entry.get("id"), "changes": [change]}]}
+            yield event, platform, account
+        for message in entry.get("messaging") or []:
+            if not isinstance(message, dict):
+                continue
+            event = {"object": payload.get("object"), "entry": [{"id": entry.get("id"), "messaging": [message]}]}
+            yield event, platform, account
+
+
+def _account_for_entry(platform: str, entry_id: str) -> str | None:
+    if not entry_id:
+        return None
+    fieldname = "instagram_business_account_id" if platform == "Instagram" else "page_id"
+    return frappe.db.get_value("Meta Social Account", {fieldname: entry_id, "is_active": 1}, "name")
 
 
 def _event_job_id(payload: dict) -> str:

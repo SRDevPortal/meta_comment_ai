@@ -200,6 +200,7 @@ def get_comments(
             "processing_status",
             "risk_category",
             "platform_comment_id",
+            "parent_comment_id",
             "content_source",
             "comment_text",
             "language",

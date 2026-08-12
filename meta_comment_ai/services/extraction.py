@@ -5,7 +5,11 @@ import re
 
 PHONE_RE = re.compile(r"(?<!\d)(?:\+?91[\s.-]?)?(?:0[\s.-]?)?[6-9](?:[\s.-]?\d){9}(?!\d)")
 DEVANAGARI_RE = re.compile(r"[\u0900-\u097F]")
-HINGLISH_WORDS = {"hai", "hain", "kya", "kaise", "mujhe", "mere", "sir", "madam", "ilaj", "dawai"}
+HINGLISH_WORDS = {
+    "aap", "acha", "batao", "chahiye", "dawai", "den", "hai", "hain", "hoga", "hum", "humne",
+    "ilaj", "ji", "ka", "kaise", "kare", "karo", "kasa", "ke", "ki", "ko", "kya", "mai", "maire",
+    "madam", "mam", "me", "mein", "mera", "mere", "mujhe", "nahi", "raha", "rahi", "sir", "se",
+}
 
 
 def extract_phone_numbers(text: str | None) -> list[str]:
@@ -27,7 +31,7 @@ def detect_language(text: str | None) -> str:
         return "unknown"
     if DEVANAGARI_RE.search(value):
         return "hi"
-    words = {word.lower().strip(".,!?") for word in value.split()}
+    words = set(re.findall(r"[a-zA-Z]+", value.lower()))
     if words & HINGLISH_WORDS:
         return "hinglish"
     return "en"

@@ -7,3 +7,4 @@
 meta_comment_ai.patches.v0_0.add_inbox_indexes
 meta_comment_ai.patches.v0_0.add_comment_search_index
 meta_comment_ai.patches.v0_0.add_cursor_index
+meta_comment_ai.patches.v0_0.add_sync_reply_indexes

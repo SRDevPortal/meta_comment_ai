@@ -39,11 +39,13 @@ def upsert_comment_from_event(event: dict, platform: str | None = None, account:
     text = doc.comment_text or ""
     phones = extract_phone_numbers(text)
     doc.phone_numbers = "\n".join(phones)
-    doc.language = doc.language or detect_language(text)
+    doc.language = detect_language(text)
     doc.risk_category = normalize_risk(classify_risk(text))
     doc.hide_recommended = 1 if phones else 0
 
-    if phones:
+    if not text.strip():
+        doc.processing_status = "Unavailable"
+    elif phones:
         doc.crm_lead = create_or_update_crm_lead(doc, phones)
         doc.processing_status = "Lead Captured"
     else:
@@ -52,6 +54,8 @@ def upsert_comment_from_event(event: dict, platform: str | None = None, account:
     if not doc.is_new():
         doc._original_modified = frappe.db.get_value("Meta Comment", doc.name, "modified")
     doc.save(ignore_permissions=True)
+    if not text.strip():
+        return doc.name
     frappe.enqueue(
         "meta_comment_ai.services.comments.generate_ai_recommendation_for_comment",
         queue="short",
@@ -66,6 +70,8 @@ def upsert_comment_from_event(event: dict, platform: str | None = None, account:
 
 def generate_ai_recommendation_for_comment(comment_name: str) -> str | None:
     comment = frappe.get_doc("Meta Comment", comment_name)
+    if not (comment.comment_text or "").strip():
+        return None
     if frappe.db.exists("Meta Comment Action", {"meta_comment": comment.name, "action_source": "AI"}):
         return None
 

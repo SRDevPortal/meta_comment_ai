@@ -98,7 +98,7 @@ def validate_ai_result(result: dict, *, fallback_text: str, fallback_language: s
     return {
         "action": action,
         "reply_text": reply_text,
-        "language": result.get("language") or fallback_language,
+        "language": _normalize_language(result.get("language"), fallback_language),
         "risk_level": risk,
         "lead_phone_numbers": result.get("lead_phone_numbers") or phones,
         "hide_recommended": bool(result.get("hide_recommended") or phones),
@@ -216,6 +216,13 @@ def _confidence(value) -> int:
         return max(0, min(100, int(value)))
     except Exception:
         return 70
+
+
+def _normalize_language(value, fallback: str) -> str:
+    language = str(value or "").strip().lower()
+    aliases = {"english": "en", "hindi": "hi", "hindi (romanized)": "hinglish", "roman hindi": "hinglish"}
+    language = aliases.get(language, language)
+    return language if language in {"en", "hi", "hinglish", "unknown"} else fallback
 
 
 def _looks_like_medical_advice(reply_text: str) -> bool:

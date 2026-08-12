@@ -44,8 +44,11 @@ def _sync_account_comments(account: str, source: str | None = None):
         for source_name in source_names:
             source_doc = frappe.get_doc("Meta Content Source", source_name)
             source_count += 1
+            # Release locks before every potentially slow external request.
+            frappe.db.commit()
             response = graph.list_all_comments(doc, source_doc.source_id)
-            for item in response.get("data") or []:
+            items = _comments_with_replies(doc, response.get("data") or [])
+            for item in items:
                 item["content_source"] = source_doc.name
                 item["source_id"] = source_doc.source_id
                 event = {"object": doc.platform.lower(), "entry": [{"changes": [{"value": item}]}]}
@@ -102,17 +105,46 @@ def _discover_content_sources(account: str, limit: int = 100):
 
     names = []
     if doc.platform == "Instagram":
-        response = graph.list_instagram_media(doc, limit=int(limit or 25))
+        frappe.db.commit()
+        response = graph.list_all_instagram_media(doc, limit=min(int(limit or 100), 100))
         for item in response.get("data") or []:
             names.append(upsert_source_from_instagram(doc, item))
     else:
-        response = graph.list_facebook_posts(doc, limit=int(limit or 25))
+        frappe.db.commit()
+        response = graph.list_all_facebook_posts(doc, limit=min(int(limit or 100), 100))
         for item in response.get("data") or []:
             names.append(upsert_source_from_facebook(doc, item))
     doc.last_sync_at = now_datetime()
     doc.last_error = ""
     doc.save(ignore_permissions=True)
     return {"success": True, "account": account, "sources": names, "count": len(names)}
+
+
+def _comments_with_replies(account_doc, comments: list[dict]) -> list[dict]:
+    """Hydrate incomplete comments and include every reply without holding DB locks."""
+    result = []
+    for item in comments:
+        comment = dict(item)
+        if not (comment.get("message") or comment.get("text")) or not (comment.get("from") or comment.get("username")):
+            try:
+                hydrated = graph.get_comment(account_doc, str(comment.get("id")))
+                comment.update({key: value for key, value in hydrated.items() if value not in (None, "")})
+            except graph.MetaGraphError:
+                pass
+        result.append(comment)
+        comment_id = comment.get("id")
+        if not comment_id:
+            continue
+        try:
+            reply_payload = graph.list_all_replies(account_doc, str(comment_id))
+        except graph.MetaGraphError:
+            # Some tokens can read the top-level comment but not its replies.
+            continue
+        for reply in reply_payload.get("data") or []:
+            reply = dict(reply)
+            reply["parent_id"] = reply.get("parent_id") or str(comment_id)
+            result.append(reply)
+    return result
 
 
 def _is_master_token_account(doc) -> bool:

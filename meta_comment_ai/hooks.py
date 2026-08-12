@@ -27,9 +27,7 @@ doctype_list_js = {
 
 scheduler_events = {
     "cron": {
-        # Production-safe reconciliation: twice daily instead of aggressive polling.
-        "0 8,20 * * *": [
-            "meta_comment_ai.tasks.sync_recent_comments",
-        ],
+        "*/15 * * * *": ["meta_comment_ai.tasks.recover_stale_syncs"],
+        "0 8,20 * * *": ["meta_comment_ai.tasks.sync_recent_comments"],
     }
 }

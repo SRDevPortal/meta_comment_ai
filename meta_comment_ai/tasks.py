@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import frappe
+from frappe.utils import add_to_date, now_datetime
 
 
 def bootstrap_social_account(account: str):
@@ -13,6 +14,10 @@ def bootstrap_social_account(account: str):
         return
 
     try:
+        frappe.db.set_value(
+            "Meta Social Account", account, {"connector_status": "Syncing", "last_error": ""}, update_modified=True
+        )
+        frappe.db.commit()
         if _is_master_token(doc):
             token = doc.get_password("access_token")
             if not token:
@@ -49,15 +54,15 @@ def sync_one_account(account: str):
     return _sync_account_comments(account)
 
 
-def enqueue_account_bootstrap(account: str):
+def enqueue_account_bootstrap(account: str, force: bool = False):
     frappe.enqueue(
         "meta_comment_ai.tasks.bootstrap_social_account",
         queue="short",
         account=account,
         now=False,
         enqueue_after_commit=True,
-        job_id=f"meta_comment_bootstrap_{account}",
-        deduplicate=True,
+        job_id=f"meta_comment_bootstrap_{account}_{frappe.generate_hash(length=8)}" if force else f"meta_comment_bootstrap_{account}",
+        deduplicate=not force,
     )
 
 
@@ -88,6 +93,25 @@ def sync_recent_comments():
             enqueue_account_bootstrap(account)
         except Exception:
             frappe.log_error(frappe.get_traceback(), "Meta Comment AI Sync Enqueue Failed")
+
+
+def recover_stale_syncs():
+    """Requeue a bounded batch of sync jobs that disappeared from Redis."""
+    cutoff = add_to_date(now_datetime(), minutes=-15)
+    accounts = frappe.get_all(
+        "Meta Social Account",
+        filters={
+            "is_active": 1,
+            "connector_status": ["in", ["Sync Queued", "Syncing"]],
+            "modified": ["<=", cutoff],
+        },
+        fields=["name"],
+        order_by="modified asc",
+        limit_start=0,
+        limit_page_length=100,
+    )
+    for row in accounts:
+        enqueue_account_bootstrap(row.name, force=True)
 
 
 def _is_master_token(doc) -> bool:

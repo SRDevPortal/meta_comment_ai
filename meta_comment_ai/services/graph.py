@@ -68,8 +68,24 @@ def list_comments(account, source_id: str, limit: int = 50) -> dict:
     )
 
 
-def list_all_comments(account, source_id: str, limit: int = 100, max_pages: int = 20) -> dict:
+def list_all_comments(account, source_id: str, limit: int = 100, max_pages: int = 100) -> dict:
     payload = list_comments(account, source_id, limit=limit)
+    return _collect_pages(account, payload, max_pages=max_pages)
+
+
+def list_all_replies(account, comment_id: str, limit: int = 100, max_pages: int = 100) -> dict:
+    edge = "replies" if account.platform == "Instagram" else "comments"
+    fields = "id,message,text,from,username,timestamp,created_time,permalink_url,parent_id,hidden"
+    payload = _request(
+        "GET",
+        graph_url(account, f"{comment_id}/{edge}"),
+        account,
+        params={"fields": fields, "limit": limit},
+    )
+    return _collect_pages(account, payload, max_pages=max_pages)
+
+
+def _collect_pages(account, payload: dict, max_pages: int) -> dict:
     data = list(payload.get("data") or [])
     next_url = (payload.get("paging") or {}).get("next")
     pages = 1
@@ -90,12 +106,20 @@ def list_facebook_posts(account, limit: int = 100) -> dict:
     return _request("GET", graph_url(account, f"{page_id}/posts"), account, params={"fields": fields, "limit": limit})
 
 
+def list_all_facebook_posts(account, limit: int = 100, max_pages: int = 10) -> dict:
+    return _collect_pages(account, list_facebook_posts(account, limit=limit), max_pages=max_pages)
+
+
 def list_instagram_media(account, limit: int = 100) -> dict:
     ig_id = account.instagram_business_account_id
     if not ig_id:
         return {"data": []}
     fields = "id,caption,media_type,media_url,thumbnail_url,permalink,timestamp,comments_count"
     return _request("GET", graph_url(account, f"{ig_id}/media"), account, params={"fields": fields, "limit": limit})
+
+
+def list_all_instagram_media(account, limit: int = 100, max_pages: int = 10) -> dict:
+    return _collect_pages(account, list_instagram_media(account, limit=limit), max_pages=max_pages)
 
 
 def send_public_reply(account, comment_id: str, message: str) -> dict:

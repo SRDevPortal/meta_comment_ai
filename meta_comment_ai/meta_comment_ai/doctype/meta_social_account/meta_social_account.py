@@ -33,7 +33,7 @@ class MetaSocialAccount(Document):
             return
         if not self.get_password("access_token"):
             return
-        self.db_set("connector_status", "Sync Queued", update_modified=False)
+        self.db_set("connector_status", "Sync Queued", update_modified=True)
         from meta_comment_ai.tasks import enqueue_account_bootstrap
 
         enqueue_account_bootstrap(self.name)
