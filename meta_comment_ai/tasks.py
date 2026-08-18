@@ -28,7 +28,7 @@ def bootstrap_social_account(account: str):
             frappe.db.set_value(
                 "Meta Social Account",
                 doc.name,
-                {"connector_status": "Active", "last_error": ""},
+                {"connector_status": "Active", "last_error": "", "last_sync_at": now_datetime()},
                 update_modified=True,
             )
             for imported_account in result.get("accounts") or []:

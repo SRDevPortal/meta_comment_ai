@@ -7,6 +7,7 @@ from frappe.model.naming import make_autoname
 
 class MetaSocialAccount(Document):
     def validate(self):
+        self._remove_token_from_account_name()
         if not self.account_label:
             self.account_label = self.account_name
         if not self.account_name:
@@ -21,6 +22,14 @@ class MetaSocialAccount(Document):
             self.default_lead_source = "Meta Comment"
         if self.auth_method == "Access Token" and not self.access_token_mode:
             self.access_token_mode = "User Long-Lived Token"
+
+    def _remove_token_from_account_name(self):
+        """Do not retain an access token in a non-password, user-visible field."""
+        if self.auth_method != "Access Token" or not self.account_name:
+            return
+        token = self.get_password("access_token")
+        if token and self.account_name == token:
+            self.account_name = self.account_label or "Meta User Token Connection"
 
     def autoname(self):
         if not self.name:

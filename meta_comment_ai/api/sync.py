@@ -20,27 +20,35 @@ def sync_account_comments(account: str, source: str | None = None):
 
 def _sync_account_comments(account: str, source: str | None = None):
     doc = frappe.get_doc("Meta Social Account", account)
-    source_names = []
-    if source:
-        source_names = [source]
-    else:
-        source_names = _discover_content_sources(account).get("sources") or []
-        manual_source_names = ensure_manual_sources(doc)
-        source_names.extend(name for name in manual_source_names if name not in source_names)
-
-    if not source_names:
-        return {
-            "success": True,
-            "account": account,
-            "imported": 0,
-            "sources": 0,
-            "message": _no_source_message(doc),
-        }
-
     imported = 0
     source_count = 0
     account_updates = {}
     try:
+        frappe.db.set_value(
+            "Meta Social Account",
+            doc.name,
+            {"connector_status": "Syncing", "last_error": ""},
+            update_modified=True,
+        )
+
+        source_names = []
+        if source:
+            source_names = [source]
+        else:
+            source_names = _discover_content_sources(account).get("sources") or []
+            manual_source_names = ensure_manual_sources(doc)
+            source_names.extend(name for name in manual_source_names if name not in source_names)
+
+        if not source_names:
+            account_updates = {"last_sync_at": now_datetime(), "last_error": "", "connector_status": "Active"}
+            return {
+                "success": True,
+                "account": account,
+                "imported": 0,
+                "sources": 0,
+                "message": _no_source_message(doc),
+            }
+
         for source_name in source_names:
             source_doc = frappe.get_doc("Meta Content Source", source_name)
             source_count += 1
