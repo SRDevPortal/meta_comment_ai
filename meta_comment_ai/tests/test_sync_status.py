@@ -6,6 +6,7 @@ from unittest.mock import MagicMock, call, patch
 
 from meta_comment_ai.api.sync import _sync_account_comments
 from meta_comment_ai.meta_comment_ai.doctype.meta_social_account.meta_social_account import MetaSocialAccount
+from meta_comment_ai.tasks import SYNC_BATCH_SIZE, sync_account_batch
 
 
 class TestSyncStatus(unittest.TestCase):
@@ -80,3 +81,36 @@ class TestAccountNameSanitization(unittest.TestCase):
         MetaSocialAccount._remove_token_from_account_name(doc)
 
         self.assertEqual(doc.account_name, "Main Connection")
+
+
+class TestBatchedSync(unittest.TestCase):
+    @patch("meta_comment_ai.tasks.now_datetime", return_value="2026-08-18 16:00:00")
+    @patch("meta_comment_ai.api.sync._sync_source_names", return_value={"imported": 4, "sources": 25})
+    @patch("meta_comment_ai.tasks.enqueue_account_batch")
+    @patch("meta_comment_ai.tasks.frappe")
+    def test_batch_queues_next_window(self, frappe_mock, enqueue_mock, sync_mock, _now):
+        frappe_mock.get_doc.return_value = SimpleNamespace(name="MSA-TEST")
+        frappe_mock.get_all.return_value = [f"MCS-{index}" for index in range(SYNC_BATCH_SIZE)]
+        frappe_mock.db = MagicMock()
+
+        result = sync_account_batch("MSA-TEST", offset=0, total=60)
+
+        sync_mock.assert_called_once()
+        enqueue_mock.assert_called_once_with("MSA-TEST", offset=SYNC_BATCH_SIZE, total=60)
+        self.assertEqual(result["offset"], SYNC_BATCH_SIZE)
+
+    @patch("meta_comment_ai.tasks.now_datetime", return_value="2026-08-18 16:00:00")
+    @patch("meta_comment_ai.api.sync._sync_source_names", return_value={"imported": 1, "sources": 10})
+    @patch("meta_comment_ai.tasks.enqueue_account_batch")
+    @patch("meta_comment_ai.tasks.frappe")
+    def test_last_batch_marks_account_active(self, frappe_mock, enqueue_mock, _sync_mock, _now):
+        frappe_mock.get_doc.return_value = SimpleNamespace(name="MSA-TEST")
+        frappe_mock.get_all.return_value = [f"MCS-{index}" for index in range(10)]
+        frappe_mock.db = MagicMock()
+
+        sync_account_batch("MSA-TEST", offset=50, total=60)
+
+        enqueue_mock.assert_not_called()
+        final_update = frappe_mock.db.set_value.call_args.args[2]
+        self.assertEqual(final_update["connector_status"], "Active")
+        self.assertEqual(final_update["last_sync_at"], "2026-08-18 16:00:00")

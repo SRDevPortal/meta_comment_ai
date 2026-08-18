@@ -4,6 +4,10 @@ import frappe
 from frappe.utils import add_to_date, now_datetime
 
 
+SYNC_BATCH_SIZE = 25
+SYNC_JOB_TIMEOUT = 1500
+
+
 def bootstrap_social_account(account: str):
     """Import connected accounts, discover content, and sync comments for one saved connector."""
     if not frappe.db.exists("Meta Social Account", account):
@@ -49,15 +53,95 @@ def bootstrap_social_account(account: str):
 
 
 def sync_one_account(account: str):
-    from meta_comment_ai.api.sync import _sync_account_comments
+    """Discover sources once, then hand comment sync to bounded long-queue jobs."""
+    from meta_comment_ai.api.sync import _discover_content_sources, ensure_manual_sources
 
-    return _sync_account_comments(account)
+    doc = frappe.get_doc("Meta Social Account", account)
+    frappe.db.set_value(
+        "Meta Social Account", account, {"connector_status": "Syncing", "last_error": ""}, update_modified=True
+    )
+    frappe.db.commit()
+    try:
+        _discover_content_sources(account)
+        ensure_manual_sources(doc)
+        total = frappe.db.count("Meta Content Source", {"social_account": account})
+        if not total:
+            frappe.db.set_value(
+                "Meta Social Account",
+                account,
+                {"connector_status": "Active", "last_error": "", "last_sync_at": now_datetime()},
+                update_modified=True,
+            )
+            return {"success": True, "account": account, "sources": 0}
+        enqueue_account_batch(account, offset=0, total=total)
+        return {"success": True, "account": account, "queued_sources": total}
+    except Exception as exc:
+        _mark_sync_error(account, exc)
+        raise
+
+
+def sync_account_batch(account: str, offset: int, total: int):
+    """Process one stable source window and enqueue its successor."""
+    from meta_comment_ai.api.sync import _sync_source_names
+
+    try:
+        doc = frappe.get_doc("Meta Social Account", account)
+        names = frappe.get_all(
+            "Meta Content Source",
+            filters={"social_account": account},
+            pluck="name",
+            order_by="name asc",
+            limit_start=int(offset),
+            limit_page_length=SYNC_BATCH_SIZE,
+        )
+        result = _sync_source_names(doc, names)
+        next_offset = int(offset) + len(names)
+        if names and next_offset < int(total):
+            frappe.db.set_value("Meta Social Account", account, "modified", now_datetime(), update_modified=False)
+            frappe.db.commit()
+            enqueue_account_batch(account, offset=next_offset, total=total)
+        else:
+            frappe.db.set_value(
+                "Meta Social Account",
+                account,
+                {"connector_status": "Active", "last_error": "", "last_sync_at": now_datetime()},
+                update_modified=True,
+            )
+        return {**result, "account": account, "offset": next_offset, "total": total}
+    except Exception as exc:
+        _mark_sync_error(account, exc)
+        raise
+
+
+def enqueue_account_batch(account: str, offset: int, total: int):
+    frappe.enqueue(
+        "meta_comment_ai.tasks.sync_account_batch",
+        queue="long",
+        timeout=SYNC_JOB_TIMEOUT,
+        account=account,
+        offset=int(offset),
+        total=int(total),
+        now=False,
+        enqueue_after_commit=True,
+        job_id=f"meta_comment_batch_{account}_{int(offset)}",
+        deduplicate=True,
+    )
+
+
+def _mark_sync_error(account: str, exc: Exception):
+    frappe.db.set_value(
+        "Meta Social Account",
+        account,
+        {"connector_status": "Error", "last_error": str(exc)[:1000]},
+        update_modified=True,
+    )
 
 
 def enqueue_account_bootstrap(account: str, force: bool = False):
     frappe.enqueue(
         "meta_comment_ai.tasks.bootstrap_social_account",
-        queue="short",
+        queue="long",
+        timeout=SYNC_JOB_TIMEOUT,
         account=account,
         now=False,
         enqueue_after_commit=True,
@@ -69,7 +153,8 @@ def enqueue_account_bootstrap(account: str, force: bool = False):
 def enqueue_account_sync(account: str):
     frappe.enqueue(
         "meta_comment_ai.tasks.sync_one_account",
-        queue="short",
+        queue="long",
+        timeout=SYNC_JOB_TIMEOUT,
         account=account,
         now=False,
         enqueue_after_commit=True,

@@ -49,23 +49,9 @@ def _sync_account_comments(account: str, source: str | None = None):
                 "message": _no_source_message(doc),
             }
 
-        for source_name in source_names:
-            source_doc = frappe.get_doc("Meta Content Source", source_name)
-            source_count += 1
-            # Release locks before every potentially slow external request.
-            frappe.db.commit()
-            response = graph.list_all_comments(doc, source_doc.source_id)
-            items = _comments_with_replies(doc, response.get("data") or [])
-            for item in items:
-                item["content_source"] = source_doc.name
-                item["source_id"] = source_doc.source_id
-                event = {"object": doc.platform.lower(), "entry": [{"changes": [{"value": item}]}]}
-                if upsert_comment_from_event(event, platform=doc.platform, account=doc.name):
-                    imported += 1
-            source_doc.last_synced_at = now_datetime()
-            source_doc.last_error = ""
-            source_doc.save(ignore_permissions=True)
-            time.sleep(0.25)
+        result = _sync_source_names(doc, source_names)
+        imported = result["imported"]
+        source_count = result["sources"]
         account_updates = {"last_sync_at": now_datetime(), "last_error": "", "connector_status": "Active"}
     except Exception as exc:
         account_updates = {"last_error": str(exc)[:1000], "connector_status": "Error"}
@@ -74,6 +60,35 @@ def _sync_account_comments(account: str, source: str | None = None):
         if account_updates:
             frappe.db.set_value("Meta Social Account", doc.name, account_updates, update_modified=True)
     return {"success": True, "account": account, "imported": imported, "sources": source_count}
+
+
+def _sync_source_names(account_doc, source_names: list[str]) -> dict:
+    """Sync a bounded source batch without changing the account's final status."""
+    imported = 0
+    source_count = 0
+    for source_name in source_names:
+        source_doc = frappe.get_doc("Meta Content Source", source_name)
+        source_count += 1
+        # Release locks before every potentially slow external request.
+        frappe.db.commit()
+        try:
+            response = graph.list_all_comments(account_doc, source_doc.source_id)
+            items = _comments_with_replies(account_doc, response.get("data") or [])
+            for item in items:
+                item["content_source"] = source_doc.name
+                item["source_id"] = source_doc.source_id
+                event = {"object": account_doc.platform.lower(), "entry": [{"changes": [{"value": item}]}]}
+                if upsert_comment_from_event(event, platform=account_doc.platform, account=account_doc.name):
+                    imported += 1
+            source_doc.last_synced_at = now_datetime()
+            source_doc.last_error = ""
+            source_doc.save(ignore_permissions=True)
+        except Exception as exc:
+            source_doc.last_error = str(exc)[:1000]
+            source_doc.save(ignore_permissions=True)
+            raise
+        time.sleep(0.25)
+    return {"imported": imported, "sources": source_count}
 
 
 @frappe.whitelist()

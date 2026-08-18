@@ -85,11 +85,11 @@ def list_all_replies(account, comment_id: str, limit: int = 100, max_pages: int 
     return _collect_pages(account, payload, max_pages=max_pages)
 
 
-def _collect_pages(account, payload: dict, max_pages: int) -> dict:
+def _collect_pages(account, payload: dict, max_pages: int | None) -> dict:
     data = list(payload.get("data") or [])
     next_url = (payload.get("paging") or {}).get("next")
     pages = 1
-    while next_url and pages < max_pages:
+    while next_url and (max_pages is None or pages < max_pages):
         next_payload = _request("GET", next_url, account)
         data.extend(next_payload.get("data") or [])
         next_url = (next_payload.get("paging") or {}).get("next")
@@ -106,7 +106,7 @@ def list_facebook_posts(account, limit: int = 100) -> dict:
     return _request("GET", graph_url(account, f"{page_id}/posts"), account, params={"fields": fields, "limit": limit})
 
 
-def list_all_facebook_posts(account, limit: int = 100, max_pages: int = 10) -> dict:
+def list_all_facebook_posts(account, limit: int = 100, max_pages: int | None = None) -> dict:
     return _collect_pages(account, list_facebook_posts(account, limit=limit), max_pages=max_pages)
 
 
@@ -118,7 +118,7 @@ def list_instagram_media(account, limit: int = 100) -> dict:
     return _request("GET", graph_url(account, f"{ig_id}/media"), account, params={"fields": fields, "limit": limit})
 
 
-def list_all_instagram_media(account, limit: int = 100, max_pages: int = 10) -> dict:
+def list_all_instagram_media(account, limit: int = 100, max_pages: int | None = None) -> dict:
     return _collect_pages(account, list_instagram_media(account, limit=limit), max_pages=max_pages)
 
 
