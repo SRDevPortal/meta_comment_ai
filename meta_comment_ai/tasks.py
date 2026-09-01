@@ -6,6 +6,13 @@ from frappe.utils import add_to_date, now_datetime
 
 SYNC_BATCH_SIZE = 25
 SYNC_JOB_TIMEOUT = 1500
+ACCOUNT_LOCK_TIMEOUT = SYNC_JOB_TIMEOUT + 60
+
+
+def _acquire_account_lock(account: str):
+    """Return a non-blocking Redis lock so duplicate recovery jobs exit harmlessly."""
+    lock = frappe.cache.lock(f"meta_comment_sync_lock:{account}", timeout=ACCOUNT_LOCK_TIMEOUT)
+    return lock if lock.acquire(blocking=False) else None
 
 
 def bootstrap_social_account(account: str):
@@ -23,37 +30,48 @@ def bootstrap_social_account(account: str):
         )
         frappe.db.commit()
         if _is_master_token(doc):
-            token = doc.get_password("access_token")
-            if not token:
-                return
-            from meta_comment_ai.api.oauth import import_accounts
+            lock = _acquire_account_lock(account)
+            if not lock:
+                return {"success": True, "account": account, "skipped": "sync already running"}
+            try:
+                token = doc.get_password("access_token")
+                if not token:
+                    return
+                from meta_comment_ai.api.oauth import import_accounts
 
-            result = import_accounts(token, doc)
-            frappe.db.set_value(
-                "Meta Social Account",
-                doc.name,
-                {"connector_status": "Active", "last_error": "", "last_sync_at": now_datetime()},
-                update_modified=True,
-            )
-            for imported_account in result.get("accounts") or []:
-                if imported_account != doc.name:
-                    enqueue_account_sync(imported_account)
-            return result
+                result = import_accounts(token, doc)
+                frappe.db.set_value(
+                    "Meta Social Account",
+                    doc.name,
+                    {"connector_status": "Active", "last_error": "", "last_sync_at": now_datetime()},
+                    update_modified=True,
+                )
+                for imported_account in result.get("accounts") or []:
+                    if imported_account != doc.name:
+                        enqueue_account_sync(imported_account)
+                return result
+            finally:
+                lock.release()
 
         return sync_one_account(account)
-    except Exception:
-        frappe.db.set_value(
-            "Meta Social Account",
-            account,
-            {"connector_status": "Error", "last_error": frappe.get_traceback()[-1000:]},
-            update_modified=True,
-        )
+    except Exception as exc:
+        _mark_sync_error(account, exc)
         frappe.log_error(frappe.get_traceback(), "Meta Comment AI Bootstrap Failed")
         raise
 
 
 def sync_one_account(account: str):
     """Discover sources once, then hand comment sync to bounded long-queue jobs."""
+    lock = _acquire_account_lock(account)
+    if not lock:
+        return {"success": True, "account": account, "skipped": "sync already running"}
+    try:
+        return _sync_one_account(account)
+    finally:
+        lock.release()
+
+
+def _sync_one_account(account: str):
     from meta_comment_ai.api.sync import _discover_content_sources, ensure_manual_sources
 
     doc = frappe.get_doc("Meta Social Account", account)
@@ -84,6 +102,15 @@ def sync_account_batch(account: str, offset: int, total: int):
     """Process one stable source window and enqueue its successor."""
     from meta_comment_ai.api.sync import _sync_source_names
 
+    lock = _acquire_account_lock(account)
+    if not lock:
+        return {
+            "success": True,
+            "account": account,
+            "offset": int(offset),
+            "total": int(total),
+            "skipped": "sync already running",
+        }
     try:
         doc = frappe.get_doc("Meta Social Account", account)
         names = frappe.get_all(
@@ -111,6 +138,8 @@ def sync_account_batch(account: str, offset: int, total: int):
     except Exception as exc:
         _mark_sync_error(account, exc)
         raise
+    finally:
+        lock.release()
 
 
 def enqueue_account_batch(account: str, offset: int, total: int):
@@ -129,12 +158,15 @@ def enqueue_account_batch(account: str, offset: int, total: int):
 
 
 def _mark_sync_error(account: str, exc: Exception):
+    # RQ rolls back the failed job transaction, so write the status in a fresh transaction.
+    frappe.db.rollback()
     frappe.db.set_value(
         "Meta Social Account",
         account,
         {"connector_status": "Error", "last_error": str(exc)[:1000]},
         update_modified=True,
     )
+    frappe.db.commit()
 
 
 def enqueue_account_bootstrap(account: str, force: bool = False):
@@ -196,7 +228,8 @@ def recover_stale_syncs():
         limit_page_length=100,
     )
     for row in accounts:
-        enqueue_account_bootstrap(row.name, force=True)
+        # Deduplication plus the account lock prevents recovery from racing an active job.
+        enqueue_account_bootstrap(row.name)
 
 
 def _is_master_token(doc) -> bool:

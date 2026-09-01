@@ -80,12 +80,23 @@ def _sync_source_names(account_doc, source_names: list[str]) -> dict:
                 event = {"object": account_doc.platform.lower(), "entry": [{"changes": [{"value": item}]}]}
                 if upsert_comment_from_event(event, platform=account_doc.platform, account=account_doc.name):
                     imported += 1
-            source_doc.last_synced_at = now_datetime()
-            source_doc.last_error = ""
-            source_doc.save(ignore_permissions=True)
+            frappe.db.set_value(
+                "Meta Content Source",
+                source_doc.name,
+                {"last_synced_at": now_datetime(), "last_error": ""},
+                update_modified=True,
+            )
         except Exception as exc:
-            source_doc.last_error = str(exc)[:1000]
-            source_doc.save(ignore_permissions=True)
+            # Persist diagnostics outside the transaction that the worker will roll back.
+            frappe.db.rollback()
+            frappe.db.set_value(
+                "Meta Content Source",
+                source_doc.name,
+                "last_error",
+                str(exc)[:1000],
+                update_modified=True,
+            )
+            frappe.db.commit()
             raise
         time.sleep(0.25)
     return {"imported": imported, "sources": source_count}
@@ -259,6 +270,9 @@ def upsert_content_source(
         return ""
     existing = frappe.db.get_value("Meta Content Source", {"source_id": source_id}, "name")
     doc = frappe.get_doc("Meta Content Source", existing) if existing else frappe.new_doc("Meta Content Source")
+    if existing:
+        # Discovery and reconciliation can overlap; always save against the latest version.
+        doc.reload()
     doc.source_label = label or str(source_id)
     doc.platform = account_doc.platform
     doc.social_account = account_doc.name

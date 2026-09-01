@@ -52,10 +52,25 @@ def _default_lead_status() -> str:
 
 
 def _ensure_lead_source(platform: str | None) -> str | None:
-    if not frappe.db.exists("DocType", "CRM Lead Source"):
+    source_field = frappe.get_meta("CRM Lead").get_field("source")
+    source_doctype = (source_field.options or "").strip() if source_field else ""
+    if not source_doctype or not frappe.db.exists("DocType", source_doctype):
         return None
+
     source = f"{platform or 'Meta'} Comment"
-    if not frappe.db.exists("CRM Lead Source", source):
-        doc = frappe.get_doc({"doctype": "CRM Lead Source", "source_name": source})
-        doc.insert(ignore_permissions=True, ignore_if_duplicate=True)
-    return source if frappe.db.exists("CRM Lead Source", source) else None
+    if frappe.db.exists(source_doctype, source):
+        return source
+
+    meta = frappe.get_meta(source_doctype)
+    values = {"doctype": source_doctype}
+    for fieldname in ("source_name", meta.title_field, "title"):
+        if fieldname and meta.has_field(fieldname):
+            values[fieldname] = source
+            break
+
+    try:
+        frappe.get_doc(values).insert(ignore_permissions=True, ignore_if_duplicate=True)
+    except Exception:
+        frappe.log_error(frappe.get_traceback(), f"Could not create Meta lead source in {source_doctype}")
+
+    return source if frappe.db.exists(source_doctype, source) else None

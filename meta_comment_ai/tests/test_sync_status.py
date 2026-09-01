@@ -6,7 +6,8 @@ from unittest.mock import MagicMock, call, patch
 
 from meta_comment_ai.api.sync import _sync_account_comments
 from meta_comment_ai.meta_comment_ai.doctype.meta_social_account.meta_social_account import MetaSocialAccount
-from meta_comment_ai.tasks import SYNC_BATCH_SIZE, sync_account_batch
+from meta_comment_ai.services.leads import _ensure_lead_source
+from meta_comment_ai.tasks import SYNC_BATCH_SIZE, _mark_sync_error, sync_account_batch
 
 
 class TestSyncStatus(unittest.TestCase):
@@ -84,6 +85,17 @@ class TestAccountNameSanitization(unittest.TestCase):
 
 
 class TestBatchedSync(unittest.TestCase):
+    @patch("meta_comment_ai.tasks.frappe")
+    def test_busy_account_exits_without_starting_duplicate_batch(self, frappe_mock):
+        lock = MagicMock()
+        lock.acquire.return_value = False
+        frappe_mock.cache.lock.return_value = lock
+
+        result = sync_account_batch("MSA-TEST", offset=25, total=100)
+
+        self.assertEqual(result["skipped"], "sync already running")
+        frappe_mock.get_all.assert_not_called()
+
     @patch("meta_comment_ai.tasks.now_datetime", return_value="2026-08-18 16:00:00")
     @patch("meta_comment_ai.api.sync._sync_source_names", return_value={"imported": 4, "sources": 25})
     @patch("meta_comment_ai.tasks.enqueue_account_batch")
@@ -114,3 +126,38 @@ class TestBatchedSync(unittest.TestCase):
         final_update = frappe_mock.db.set_value.call_args.args[2]
         self.assertEqual(final_update["connector_status"], "Active")
         self.assertEqual(final_update["last_sync_at"], "2026-08-18 16:00:00")
+
+    @patch("meta_comment_ai.tasks.frappe")
+    def test_error_status_is_written_in_fresh_transaction(self, frappe_mock):
+        frappe_mock.db = MagicMock()
+
+        _mark_sync_error("MSA-TEST", RuntimeError("batch failed"))
+
+        frappe_mock.db.rollback.assert_called_once_with()
+        frappe_mock.db.commit.assert_called_once_with()
+        update = frappe_mock.db.set_value.call_args.args[2]
+        self.assertEqual(update["connector_status"], "Error")
+        self.assertEqual(update["last_error"], "batch failed")
+
+
+class TestLeadSourceCompatibility(unittest.TestCase):
+    @patch("meta_comment_ai.services.leads.frappe")
+    def test_uses_link_target_configured_on_crm_lead(self, frappe_mock):
+        source_field = SimpleNamespace(options="Source")
+        source_meta = SimpleNamespace(
+            title_field=None,
+            has_field=lambda fieldname: fieldname == "source_name",
+        )
+        frappe_mock.get_meta.side_effect = lambda doctype: (
+            SimpleNamespace(get_field=lambda _fieldname: source_field)
+            if doctype == "CRM Lead"
+            else source_meta
+        )
+        frappe_mock.db.exists.side_effect = [True, False, True]
+
+        result = _ensure_lead_source("Instagram")
+
+        self.assertEqual(result, "Instagram Comment")
+        values = frappe_mock.get_doc.call_args.args[0]
+        self.assertEqual(values["doctype"], "Source")
+        self.assertEqual(values["source_name"], "Instagram Comment")

@@ -46,8 +46,13 @@ def upsert_comment_from_event(event: dict, platform: str | None = None, account:
     if not text.strip():
         doc.processing_status = "Unavailable"
     elif phones:
-        doc.crm_lead = create_or_update_crm_lead(doc, phones)
-        doc.processing_status = "Lead Captured"
+        try:
+            doc.crm_lead = create_or_update_crm_lead(doc, phones)
+            doc.processing_status = "Lead Captured" if doc.crm_lead else "Needs Review"
+        except Exception:
+            # CRM configuration must never prevent a Meta comment from being ingested.
+            frappe.log_error(frappe.get_traceback(), "Meta CRM Lead Creation Failed")
+            doc.processing_status = "Needs Review"
     else:
         doc.processing_status = "New"
 
