@@ -130,7 +130,7 @@ def import_accounts(user_access_token: str, connector=None) -> dict:
         f"{GRAPH_BASE}/{_version(connector)}/me/accounts",
         params={
             "access_token": user_access_token,
-            "fields": "id,name,category,access_token,instagram_business_account{id,username,name}",
+            "fields": "id,name,category,access_token,business{id,name},instagram_business_account{id,username,name}",
             "limit": 100,
         },
         timeout=30,
@@ -148,6 +148,7 @@ def import_accounts(user_access_token: str, connector=None) -> dict:
             instagram_business_account_id=None,
             token=page.get("access_token") or user_access_token,
             connector=connector,
+            business_id=(page.get("business") or {}).get("id"),
         )
         facebook_count += 1
         imported_accounts.append(page_doc.name)
@@ -161,6 +162,7 @@ def import_accounts(user_access_token: str, connector=None) -> dict:
                 instagram_business_account_id=ig.get("id"),
                 token=page.get("access_token") or user_access_token,
                 connector=connector,
+                business_id=(page.get("business") or {}).get("id"),
             )
             instagram_count += 1
             imported_accounts.append(ig_doc.name)
@@ -183,6 +185,7 @@ def upsert_social_account(
     instagram_business_account_id: str | None,
     token: str,
     connector,
+    business_id: str | None = None,
 ):
     filters = {"platform": platform}
     if platform == "Instagram":
@@ -203,6 +206,7 @@ def upsert_social_account(
     doc.platform = platform
     doc.page_id = page_id
     doc.instagram_business_account_id = instagram_business_account_id
+    doc.business_id = business_id
     doc.meta_app_id = getattr(connector, "meta_app_id", None)
     if connector and hasattr(connector, "get_password"):
         doc.meta_app_secret = connector.get_password("meta_app_secret")
@@ -242,6 +246,19 @@ def update_connected_accounts_table(connector_name: str, account_names: list[str
         )
     connector.flags.skip_auto_sync = True
     connector.save(ignore_permissions=True)
+
+
+def refresh_connected_account_status(account_name: str) -> None:
+    """Keep the read-only master summary in sync with its child account."""
+    account = frappe.get_doc("Meta Social Account", account_name)
+    if not account.parent_social_account:
+        return
+    frappe.db.set_value(
+        "Meta Connected Account",
+        {"parent": account.parent_social_account, "meta_social_account": account.name},
+        {"connector_status": account.connector_status, "last_sync_at": account.last_sync_at},
+        update_modified=False,
+    )
 
 
 def get_redirect_uri(connector=None) -> str:

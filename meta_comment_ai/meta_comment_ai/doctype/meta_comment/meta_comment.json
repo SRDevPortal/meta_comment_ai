@@ -49,7 +49,7 @@
   {"fieldname": "post_id", "fieldtype": "Data", "label": "Post ID"},
   {"fieldname": "media_id", "fieldtype": "Data", "label": "Media ID"},
   {"fieldname": "ad_id", "fieldtype": "Data", "label": "Ad ID"},
-  {"fieldname": "permalink_url", "fieldtype": "Data", "label": "Permalink URL"},
+  {"fieldname": "permalink_url", "fieldtype": "Small Text", "label": "Permalink URL"},
   {"fieldname": "comment_section", "fieldtype": "Section Break", "label": "Comment"},
   {"fieldname": "comment_text", "fieldtype": "Text", "in_list_view": 1, "label": "Comment Text"},
   {"fieldname": "language", "fieldtype": "Data", "label": "Language"},

@@ -128,12 +128,17 @@ def sync_account_batch(account: str, offset: int, total: int):
             frappe.db.commit()
             enqueue_account_batch(account, offset=next_offset, total=total)
         else:
+            failed_sources = frappe.db.count(
+                "Meta Content Source", {"social_account": account, "last_error": ["is", "set"]}
+            )
+            warning = f"{failed_sources} inaccessible/deleted source(s) skipped; other content synced." if failed_sources else ""
             frappe.db.set_value(
                 "Meta Social Account",
                 account,
-                {"connector_status": "Active", "last_error": "", "last_sync_at": now_datetime()},
+                {"connector_status": "Active", "last_error": warning, "last_sync_at": now_datetime()},
                 update_modified=True,
             )
+            _refresh_connected_status(account)
         return {**result, "account": account, "offset": next_offset, "total": total}
     except Exception as exc:
         _mark_sync_error(account, exc)
@@ -167,6 +172,19 @@ def _mark_sync_error(account: str, exc: Exception):
         update_modified=True,
     )
     frappe.db.commit()
+    _refresh_connected_status(account)
+
+
+def _refresh_connected_status(account: str):
+    child = frappe.get_doc("Meta Social Account", account)
+    if not child.parent_social_account:
+        return
+    frappe.db.set_value(
+        "Meta Connected Account",
+        {"parent": child.parent_social_account, "meta_social_account": child.name},
+        {"connector_status": child.connector_status, "last_sync_at": child.last_sync_at},
+        update_modified=False,
+    )
 
 
 def enqueue_account_bootstrap(account: str, force: bool = False):

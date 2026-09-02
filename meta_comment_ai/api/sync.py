@@ -63,9 +63,10 @@ def _sync_account_comments(account: str, source: str | None = None):
 
 
 def _sync_source_names(account_doc, source_names: list[str]) -> dict:
-    """Sync a bounded source batch without changing the account's final status."""
+    """Sync a bounded source batch; inaccessible sources must not abort the account."""
     imported = 0
     source_count = 0
+    errors = []
     for source_name in source_names:
         source_doc = frappe.get_doc("Meta Content Source", source_name)
         source_count += 1
@@ -97,9 +98,10 @@ def _sync_source_names(account_doc, source_names: list[str]) -> dict:
                 update_modified=True,
             )
             frappe.db.commit()
-            raise
+            errors.append({"source": source_doc.name, "error": str(exc)[:500]})
+            continue
         time.sleep(0.25)
-    return {"imported": imported, "sources": source_count}
+    return {"imported": imported, "sources": source_count, "errors": errors}
 
 
 @frappe.whitelist()
