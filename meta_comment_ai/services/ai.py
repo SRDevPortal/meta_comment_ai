@@ -9,6 +9,7 @@ import requests
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 
+from meta_comment_ai.number_privacy import mask_log_text
 from meta_comment_ai.services.extraction import detect_language, extract_phone_numbers
 from meta_comment_ai.services.policy import classify_risk, normalize_risk
 
@@ -76,7 +77,7 @@ def generate_recommendation(comment_doc) -> dict:
     try:
         result = _call_provider(provider, settings, prompt_policy, comment_doc, language, risk, phones)
     except Exception:
-        frappe.log_error(frappe.get_traceback(), "Meta Comment AI Provider Failed")
+        frappe.log_error(mask_log_text(frappe.get_traceback()), "Meta Comment AI Provider Failed")
         return _local_recommendation("draft_public_reply", text, language, risk, phones, "")
 
     return validate_ai_result(result, fallback_text=text, fallback_language=language, fallback_risk=risk, phones=phones)

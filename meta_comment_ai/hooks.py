@@ -31,3 +31,6 @@ scheduler_events = {
         "0 8,20 * * *": ["meta_comment_ai.tasks.sync_recent_comments"],
     }
 }
+
+# Authenticate first, then protect raw Meta comment and AI payload HTTP reads.
+auth_hooks = ["meta_comment_ai.document_privacy.guard_request"]

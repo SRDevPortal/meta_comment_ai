@@ -263,7 +263,7 @@ frappe.pages["meta-comment-inbox"].on_page_load = function(wrapper) {
                 </div>
             </div>
             <div class="mca-comment-tools">
-                <input class="form-control input-sm" id="mca-comment-search" placeholder="Search comments, names, phone numbers" />
+                <input class="form-control input-sm" id="mca-comment-search" placeholder="Search comments or names" />
                 <select class="form-control input-sm" id="mca-status">
                     <option>All</option>
                     <option>No Reply</option>
@@ -358,11 +358,11 @@ frappe.pages["meta-comment-inbox"].on_page_load = function(wrapper) {
         $("#mca-detail-panel").html('<div class="text-muted">Loading AI suggestion...</div>');
         api.detail(comment).then((r) => {
             const data = r.message || {};
-            renderCommentDetail(data.comment || {}, data.actions || []);
+            renderCommentDetail(data.comment || {}, data.actions || [], Boolean(data.raw_record_access));
         });
     }
 
-    function renderCommentDetail(c, actions) {
+    function renderCommentDetail(c, actions, canViewRawRecord) {
         const title = c.commenter_username || c.commenter_name || c.platform_comment_id;
         const aiActions = actions.filter((a) => a.action_source === "AI");
         $("#mca-detail-panel").html(`
@@ -372,7 +372,7 @@ frappe.pages["meta-comment-inbox"].on_page_load = function(wrapper) {
                 <span>${frappe.utils.escape_html(c.processing_status || "")}</span>
                 <span>${frappe.utils.escape_html(c.risk_category || "")}</span>
                 ${c.permalink_url ? `<a href="${frappe.utils.escape_html(c.permalink_url)}" target="_blank">Open Comment</a>` : ""}
-                <a href="/app/meta-comment/${encodeURIComponent(c.name)}">Record</a>
+                ${canViewRawRecord ? `<a href="/app/meta-comment/${encodeURIComponent(c.name)}">Record</a>` : ""}
             </div>
             <div style="margin-top: 12px;">
                 <div class="mca-detail-title">AI Suggestion</div>

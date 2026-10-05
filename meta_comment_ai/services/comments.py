@@ -6,6 +6,7 @@ from datetime import datetime
 import frappe
 from frappe.utils import add_to_date, get_datetime, now_datetime
 
+from meta_comment_ai.number_privacy import mask_log_text
 from meta_comment_ai.services.ai import generate_recommendation
 from meta_comment_ai.services.extraction import detect_language, extract_phone_numbers
 from meta_comment_ai.services.leads import create_or_update_crm_lead
@@ -51,7 +52,7 @@ def upsert_comment_from_event(event: dict, platform: str | None = None, account:
             doc.processing_status = "Lead Captured" if doc.crm_lead else "Needs Review"
         except Exception:
             # CRM configuration must never prevent a Meta comment from being ingested.
-            frappe.log_error(frappe.get_traceback(), "Meta CRM Lead Creation Failed")
+            frappe.log_error(mask_log_text(frappe.get_traceback()), "Meta CRM Lead Creation Failed")
             doc.processing_status = "Needs Review"
     else:
         doc.processing_status = "New"

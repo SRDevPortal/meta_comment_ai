@@ -3,6 +3,7 @@ from __future__ import annotations
 import frappe
 from frappe.utils import getdate
 
+from meta_comment_ai.number_privacy import browser_response, guard_phone_search, restricted
 from meta_comment_ai.security import require_operator
 
 MAX_COMMENT_PAGE_SIZE = 200
@@ -12,6 +13,7 @@ REPLY_STATUSES = ("Draft", "Needs Review", "Approved", "Scheduled", "Success")
 
 
 @frappe.whitelist()
+@browser_response
 def get_accounts():
     require_operator()
     rows = frappe.get_all(
@@ -53,6 +55,7 @@ def get_accounts():
 
 
 @frappe.whitelist()
+@browser_response
 def get_connected_accounts(account: str | None = None):
     require_operator()
     if not account:
@@ -74,6 +77,7 @@ def get_connected_accounts(account: str | None = None):
 
 
 @frappe.whitelist()
+@browser_response
 def get_sources(
     account: str | None = None,
     child_account: str | None = None,
@@ -145,6 +149,7 @@ def get_sources(
 
 
 @frappe.whitelist()
+@browser_response
 def get_source_detail(source: str):
     require_operator()
     doc = frappe.get_doc("Meta Content Source", source)
@@ -160,6 +165,7 @@ def get_source_detail(source: str):
 
 
 @frappe.whitelist()
+@browser_response
 def get_comments(
     account: str | None = None,
     child_account: str | None = None,
@@ -185,6 +191,7 @@ def get_comments(
         filters["creation"] = ["<", before_creation]
 
     if search:
+        guard_phone_search(search)
         matching_names = _search_comment_names(search, filters, limit)
         if not matching_names:
             return []
@@ -266,6 +273,7 @@ def _boolean_search(search: str) -> str:
 
 
 @frappe.whitelist()
+@browser_response
 def get_comment_detail(comment: str):
     require_operator()
     doc = frappe.get_doc("Meta Comment", comment)
@@ -273,6 +281,7 @@ def get_comment_detail(comment: str):
     doc.reload()
     return {
         "comment": doc.as_dict(),
+        "raw_record_access": not restricted(),
         "actions": frappe.get_all(
             "Meta Comment Action",
             filters={"meta_comment": doc.name},

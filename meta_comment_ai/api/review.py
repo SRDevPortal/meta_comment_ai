@@ -6,12 +6,14 @@ import time
 import frappe
 from frappe.utils import add_to_date, now_datetime
 
+from meta_comment_ai.number_privacy import browser_response, mask_log_text
 from meta_comment_ai.security import require_destructive_action, require_operator
 from meta_comment_ai.services import graph
 from meta_comment_ai.services.policy import normalize_risk
 
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["POST"])
+@browser_response
 def create_comment_action(comment_name: str, action_type: str, reply_text: str | None = None, execute_now: int = 0):
     require_operator()
     comment = frappe.get_doc("Meta Comment", comment_name)
@@ -49,7 +51,8 @@ def create_comment_action(comment_name: str, action_type: str, reply_text: str |
     return {"action": action.name, "status": action.status}
 
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["POST"])
+@browser_response
 def generate_ai_action(comment_name: str):
     require_operator()
     from meta_comment_ai.services.comments import generate_ai_recommendation_for_comment
@@ -65,7 +68,8 @@ def generate_ai_action(comment_name: str):
     return {"action": action, "status": "created"}
 
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["POST"])
+@browser_response
 def approve_action(action_name: str):
     require_operator()
     action = frappe.get_doc("Meta Comment Action", action_name)
@@ -95,7 +99,8 @@ def approve_action(action_name: str):
     return {"action": action.name, "status": action.status, "scheduled_for": action.scheduled_for}
 
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["POST"])
+@browser_response
 def execute_action_now(action_name: str):
     require_operator()
     action = frappe.get_doc("Meta Comment Action", action_name)
@@ -114,18 +119,20 @@ def execute_action_now(action_name: str):
     return {"action": action.name, "status": action.status, "executed_at": action.executed_at, "error": action.error}
 
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["POST"])
+@browser_response
 def reject_action(action_name: str, reason: str | None = None):
     require_operator()
     action = frappe.get_doc("Meta Comment Action", action_name)
     action.status = "Rejected"
-    action.error = reason or "Rejected by user"
+    action.error = mask_log_text(reason) or "Rejected by user"
     action.save(ignore_permissions=True)
     frappe.db.set_value("Meta Comment", action.meta_comment, "processing_status", "Skipped")
     return {"action": action.name, "status": action.status}
 
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["POST"])
+@browser_response
 def retry_action(action_name: str):
     require_operator()
     action = frappe.get_doc("Meta Comment Action", action_name)
@@ -158,10 +165,11 @@ def execute_approved_action(action_name: str, delay_seconds: int | None = None):
         _mark_comment_success(comment, action)
     except Exception as exc:
         action.status = "Failed"
-        action.error = str(exc)[:1000]
+        safe_error = mask_log_text(str(exc))[:1000]
+        action.error = safe_error
         action.save(ignore_permissions=True)
-        frappe.db.set_value("Meta Comment", comment.name, {"processing_status": "Failed", "last_error": str(exc)[:1000]})
-        frappe.log_error(frappe.get_traceback(), "Meta Comment Action Failed")
+        frappe.db.set_value("Meta Comment", comment.name, {"processing_status": "Failed", "last_error": safe_error})
+        frappe.log_error(mask_log_text(frappe.get_traceback()), "Meta Comment Action Failed")
 
 
 def _execute(action, comment, account, settings):
